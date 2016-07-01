@@ -5,3 +5,4 @@ jsonschema
 msgpack-python
 pymongo
 toml
+-e git://github.com/williballenthin/python-registry.git#egg=python-registry

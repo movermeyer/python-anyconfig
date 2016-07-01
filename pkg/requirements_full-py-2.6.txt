@@ -7,3 +7,4 @@ ordereddict
 pymongo
 simplejson
 toml
+-e git://github.com/williballenthin/python-registry.git#egg=python-registry
