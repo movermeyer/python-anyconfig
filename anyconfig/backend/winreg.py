@@ -33,7 +33,7 @@ import Registry.Registry as winreg
 import anyconfig.backend.base
 
 
-def _decode_0(rval, to_container=dict):
+def decode_0(rval, to_container=dict):
     """
     Decode :class:`Registry.Registry.RegistryValue` object.
 
@@ -52,7 +52,7 @@ def _decode_0(rval, to_container=dict):
                             value=base64.encodestring(rval.value()))
 
 
-def _decode(rkey, to_container=dict):
+def decode(rkey, to_container=dict):
     """
     Decode :class:`Registry.Registry.RegistryKey` object.
 
@@ -61,8 +61,8 @@ def _decode(rkey, to_container=dict):
 
     :return: Dict or dict-like object represents this object
     """
-    skeys = [_decode(sk, to_container) for sk in rkey.subkeys()]
-    vals = [_decode_0(v, to_container) for v in rkey.values()]
+    skeys = [decode(sk, to_container) for sk in rkey.subkeys()]
+    vals = [decode_0(v, to_container) for v in rkey.values()]
     val = to_container(subkeys=skeys, values=vals,
                        timestamp=str(rkey.timestamp()))
     return to_container({rkey.path(): val})
@@ -85,6 +85,6 @@ class Parser(anyconfig.backend.base.FromStreamLoader):
 
         :return: Dict-like object holding config parameters
         """
-        return _decode(winreg.Registry(stream).root(), to_container)
+        return decode(winreg.Registry(stream).root(), to_container)
 
 # vim:sw=4:ts=4:et:
