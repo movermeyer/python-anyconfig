@@ -73,6 +73,7 @@ class Parser(anyconfig.backend.base.FromStreamLoader):
     Windows registry files parser.
     """
     _type = "registry"
+    _open_flags = ('rb', 'wb')
 
     def load_from_stream(self, stream, to_container, **options):
         """
