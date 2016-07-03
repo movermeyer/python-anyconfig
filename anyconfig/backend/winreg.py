@@ -15,7 +15,7 @@
 - Requirements: python-registry, http://www.williballenthin.com/registry/
 - Limitations:
 
-  - Dump[s] APIs are not implemented and supported yet.
+  - Dump[s] APIs are not implemented / supported yet.
 
   - All values are encoded into base64 encoded and the output may be larger
     than original.
