@@ -125,20 +125,18 @@ def _dml_st_itr(rel, data, keys):
     :return: Generator to yield a tuple of (DML_statement, values_to_insert)
     """
     nkeys = len(keys)
+    stmt = ("INSERT INTO '%s' VALUES "
+            "(%s)" % (rel, ", ".join('?' for _ in range(nkeys))))
+
     for items in data:  # items :: [(key, value)]
         # ..note:: Some reserved keywords must be single-quoted.
-        vars = ["'%s'" % k for k, _v in items]
         if len(items) < nkeys:  # Some values are missing.
-            holders = ", ".join(":%s" % n for n in vars)
-            stmt = "INSERT INTO '%s' (%s) VALUES (%s)" % (rel, ", ".join(vars),
-                                                          holders)
-            ret = (stmt, dict(items))
+            vars = zip(*items)[0]
+            params = ("'%s' (%s)" % (rel, ", ".join("'%s'" % v for v in vars)),
+                      ", ".join('?' for _ in vars))
+            yield ("INSERT INTO %s VALUES (%s)" % params, zip(*items)[1])
         else:
-            holders = ", ".join("?" for _ in range(nkeys))
-            ret = ("INSERT INTO '%s' VALUES (%s)" % (rel, holders),
-                   zip(*items)[1])
-
-        yield ret
+            yield (stmt, zip(*items)[1])
 
 
 def dump(cnf, conn, **options):
