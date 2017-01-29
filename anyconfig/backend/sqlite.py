@@ -264,6 +264,6 @@ class Parser(anyconfig.backend.base.FromStreamLoader,
 
         :return: Dict-like object holding config parameters
         """
-        dumps(cnf, **kwargs)
+        return dumps(cnf, **kwargs)
 
 # vim:sw=4:ts=4:et:
