@@ -110,7 +110,7 @@ def _sqlite_type(val):
 
 def _dml_st_itr(rel, data, keys):
     """
-    Generator to yield statement to insert values from `data` into tables.
+    Generator to yield DML statement to insert values from `data` into tables.
 
     :param rel: Relation (table) name
     :param data: A list of data which must not be empty
@@ -177,8 +177,8 @@ def dumps(cnf, **options):
 def _fun(*args, **kwargs):
     """
     .. note::
-       I think that both methods to load from string/dump to string do not make
-       sense in the sqlite backend.
+       I think that function to load from string do not make sense in the
+       sqlite backend.
     """
     raise NotImplementedError(ERR_NOT_IMPL)
 
