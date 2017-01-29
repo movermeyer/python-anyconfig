@@ -11,7 +11,14 @@ Parser for SQLite database files.
 - Format to support: SQLite database files sqlite3 module can process
 - Requirements: sqlite3 in python standard library
 - Development Status: 3 - Alpha
-- Limitations: Currently, it only supports simple loading and dumping
+- Limitations:
+  - It only supports simple load and dump, and these are not symmetric
+    operations, that is, data loaded and dumped may be changed from the
+    original one.
+  - API `loads` is not supported in this backend because
+    :meth:`load_from_string` is not implemented.
+  - This backend will generate some definitions of extra SQL tables and
+    definitions of SQL tables resulted are not normalized and optimized at all.
 - Special options:
   - isolation_level to set isolation level of the connection object
   - extensions to provide a list of SQLite extension file paths to load. It's
