@@ -267,7 +267,7 @@ class Parser(anyconfig.backend.base.FromStreamLoader):
         :param filepath: Config file path
         :param kwargs: optional keyword parameters to be sanitized
         """
-        with self.wopen(filepath, **kwargs) as cnn:
+        with self.wopen(filepath, **kwargs) as conn:
             dump(cnf, conn, **kwargs)
 
     def dump_to_string(self, cnf, **kwargs):
