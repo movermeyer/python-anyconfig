@@ -193,8 +193,7 @@ def _assert_conn(conn):
         raise RuntimeError("Given one is not a sqlite3.Connection object!")
 
 
-class Parser(anyconfig.backend.base.FromStreamLoader,
-             anyconfig.backend.base.ToStreamDumper):
+class Parser(anyconfig.backend.base.FromStreamLoader):
     """
     Parser for SQLite database files.
     """
@@ -254,6 +253,17 @@ class Parser(anyconfig.backend.base.FromStreamLoader,
         """
         _assert_conn(conn)
         dump(cnf, conn, **kwargs)
+
+    def dump_to_path(self, cnf, filepath, **kwargs):
+        """
+        Dump config `cnf` to a file `filepath`.
+
+        :param cnf: Config data to dump
+        :param filepath: Config file path
+        :param kwargs: optional keyword parameters to be sanitized
+        """
+        with self.wopen(filepath, **kwargs) as cnn:
+            dump(cnf, conn, **kwargs)
 
     def dump_to_string(self, cnf, **kwargs):
         """
