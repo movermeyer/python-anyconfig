@@ -79,8 +79,8 @@ def load(conn, to_container=dict, **options):
         res = cur.execute("PRAGMA table_info('%s')" % tname).fetchall()
         keys = zip(*res)[1]
 
-        ret[tname] = [to_container(itertools.izip_longest(keys, vals)) for vals
-                      in cur.execute("SELECT * FROM %s" % tname)]
+        ret[tname] = [to_container(list(itertools.izip_longest(keys, vals)))
+                      for vals in cur.execute("SELECT * FROM %s" % tname)]
 
     return ret
 
