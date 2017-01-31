@@ -23,6 +23,7 @@ import anyconfig.backend.ini
 import anyconfig.backend.json
 import anyconfig.backend.properties
 import anyconfig.backend.shellvars
+import anyconfig.backend.sqlite
 import anyconfig.backend.xml
 
 LOGGER = logging.getLogger(__name__)
