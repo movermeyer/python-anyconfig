@@ -28,7 +28,8 @@ import anyconfig.backend.xml
 LOGGER = logging.getLogger(__name__)
 PARSERS = [anyconfig.backend.ini.Parser, anyconfig.backend.json.Parser,
            anyconfig.backend.properties.Parser,
-           anyconfig.backend.shellvars.Parser, anyconfig.backend.xml.Parser]
+           anyconfig.backend.shellvars.Parser, anyconfig.backend.sqlite.Parser,
+           anyconfig.backend.xml.Parser]
 
 _NA_MSG = "%s is not available. Disabled %s support."
 
