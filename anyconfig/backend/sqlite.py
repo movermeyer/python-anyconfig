@@ -57,6 +57,17 @@ def _set_options(conn, **options):
             conn.load_extension(ext_path)
 
 
+def _try_exec(cursor, sql, *args):
+    """
+    An wrapper function for :meth:`execute` of :class:`sqlite3.Cursor`.
+    """
+    try:
+        return cursor.execute(sql, *args)
+    except sqlite3.Error as exc:
+        LOGGER.error(exc)
+        raise
+
+
 def load(conn, to_container=dict, **options):
     """
     Load config data from given initialized :class:`sqlite3.Connection` object.
@@ -79,15 +90,13 @@ def load(conn, to_container=dict, **options):
     _set_options(conn, **options)
     ret = to_container()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tbls = _try_exec(cur, "SELECT name FROM sqlite_master WHERE type='table'")
 
-    for tbl in cur.fetchall():
-        tname = tbl[0]
-        res = cur.execute("PRAGMA table_info('%s')" % tname).fetchall()
-        keys = zip(*res)[1]
-
+    for tname in [t[0] for t in tbls]:
+        keys = [x[1] for x
+                in _try_exec(cur, "PRAGMA table_info('%s')" % tname)]
         ret[tname] = [to_container(list(itertools.izip_longest(keys, vals)))
-                      for vals in cur.execute("SELECT * FROM %s" % tname)]
+                      for vals in _try_exec(cur, "SELECT * FROM %s" % tname)]
 
     return ret
 
@@ -159,11 +168,11 @@ def dump(cnf, conn, **options):
         kts = itertools.izip(keys, (_sqlite_type(v) for _k, v in data[0]))
         stmt = ("CREATE TABLE IF NOT EXISTS "
                 "'%s' (%s)" % (rel, ", ".join("'%s' %s" % kt for kt in kts)))
-        cur.execute(stmt)
+        _try_exec(cur, stmt)
         conn.commit()
 
         for stmt, items in _dml_st_itr(rel, data, keys):
-            cur.execute(stmt, items)
+            _try_exec(cur, stmt, items)
         conn.commit()
 
 
