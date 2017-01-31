@@ -85,7 +85,7 @@ def load(conn, to_container=dict, **options):
         https://docs.python.org/2.7/library/sqlite3.html#connection-objects
         for example.
 
-    :return: Dict-like object holding shell variables' definitions
+    :return: Dict-like object holding data in input SQLite database
     """
     _set_options(conn, **options)
     ret = to_container()
