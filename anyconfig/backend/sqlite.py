@@ -33,8 +33,8 @@ import os
 import sqlite3
 
 import anyconfig.backend.base
+import anyconfig.backend.relations
 import anyconfig.compat
-import m9dicts
 
 
 LOGGER = logging.getLogger(__name__)
@@ -101,6 +101,28 @@ def load(conn, to_container=dict, **options):
     return ret
 
 
+def loads(stmts, to_container=dict, **options):
+    """
+    Load config data from given string reprensents SQL statements.
+
+    :param stmts:
+        A string represents SQL statements to create table and insert data
+    :param to_container:
+        Factory function to create a dict-like object to store data
+    :param options:
+        Options applied to :class:`sqlite3.Connection` object, `conn`.
+        See also `load` defined in the above.
+
+    :return: Dict-like object holding data came from SQLite database
+    """
+    conn = sqlite3.connect(":memory:")
+    _set_options(conn, **options)
+    cur = conn.cursor()
+    _try_exec(cur, stmts)
+
+    return load(conn, to_container=to_container)
+
+
 def _sqlite_type(val):
     """
     :param val: Value to detect its type
@@ -124,6 +146,13 @@ def _sqlite_type(val):
         return "BLOB"
 
 
+def _is_ref(obj):
+    """
+    :return: True if given object `obj` is an instance of Ref.
+    """
+    return isinstance(obj, anyconfig.backend.relations.Ref)
+
+
 def _dml_st_itr(rel, data, keys):
     """
     Generator to yield DML statement to insert values from `data` into tables.
@@ -134,18 +163,47 @@ def _dml_st_itr(rel, data, keys):
     :return: Generator to yield a tuple of (DML_statement, values_to_insert)
     """
     nkeys = len(keys)
-    stmt = ("INSERT INTO '%s' VALUES "
+    stmt = ("INSERT OR REPLACE INTO '%s' VALUES "
             "(%s)" % (rel, ", ".join('?' for _ in range(nkeys))))
 
     for items in data:  # items :: [(key, value)]
         # ..note:: Some reserved keywords must be single-quoted.
         if len(items) < nkeys:  # Some values are missing.
-            vars = zip(*items)[0]
-            params = ("'%s' (%s)" % (rel, ", ".join("'%s'" % v for v in vars)),
-                      ", ".join('?' for _ in vars))
-            yield ("INSERT INTO %s VALUES (%s)" % params, zip(*items)[1])
+            rvars = zip(*items)[0]
+            params = ("'%s' (%s)" % (rel,
+                                     ", ".join("'%s'" % v for v in rvars)),
+                      ", ".join('?' for _ in rvars))
+            yield ("INSERT OR REPLACE INTO %s VALUES (%s)" % params,
+                   zip(*items)[1])
         else:
             yield (stmt, zip(*items)[1])
+
+
+def _create_table_and_insert_data(conn, relvar, data, has_foreign_keys=False):
+    """
+    :param conn: :class:`sqlite3.Connection` object
+    :param relvar: Relation variable to be used as table name
+    :param data: A list of data which must not be empty
+    :param has_foreign_keys: True if `relvar` has foreign key constraints
+    """
+    # data = sorted(data, key=len, reverse=True)  # Is it needed?
+    keys = zip(*data[0])[0]
+    kts = ", ".join("'%s' %s\n" % kt for kt
+                    in zip(keys, (_sqlite_type(v) for _k, v in data[0])))
+    if has_foreign_keys:
+        fks = ", ".join("FOREIGN KEY(%s) REFERENCES %s(id)\n" % (k, v.relvar)
+                        for k, v in data[0])
+        stmt = "CREATE TABLE IF NOT EXISTS '%s' (%s, %s)" % (relvar, kts, fks)
+    else:
+        stmt = "CREATE TABLE IF NOT EXISTS '%s' (%s)" % (relvar, kts)
+
+    cur = conn.cursor()
+    _try_exec(cur, stmt)
+    conn.commit()
+
+    for stmt, items in _dml_st_itr(relvar, data, keys):
+        _try_exec(cur, stmt, items)
+    conn.commit()
 
 
 def dump(cnf, conn, **options):
@@ -157,23 +215,20 @@ def dump(cnf, conn, **options):
     :param options: See the description of `load` function below.
     """
     _set_options(conn, **options)
-    cur = conn.cursor()
-    for rel, data in m9dicts.convert_to(cnf, to_type=m9dicts.RELATIONS_TYPE):
-        if not data:
+    rels = [r for r in anyconfig.backend.relations.dict_to_rels(cnf) if r]
+    rrels = []
+
+    # 1. Create table of which does not have foreign key constraints.
+    for relvar, data in rels:
+        if any(t for t in data if _is_ref(t[1])):
+            rrels.append((relvar, data))
             continue
 
-        data = sorted(data, key=len, reverse=True)
+        _create_table_and_insert_data(conn, relvar, data)
 
-        keys = zip(*data[0])[0]
-        kts = itertools.izip(keys, (_sqlite_type(v) for _k, v in data[0]))
-        stmt = ("CREATE TABLE IF NOT EXISTS "
-                "'%s' (%s)" % (rel, ", ".join("'%s' %s" % kt for kt in kts)))
-        _try_exec(cur, stmt)
-        conn.commit()
-
-        for stmt, items in _dml_st_itr(rel, data, keys):
-            _try_exec(cur, stmt, items)
-        conn.commit()
+    for relvar, data in rrels:
+        _create_table_and_insert_data(conn, relvar, data,
+                                      has_foreign_keys=True)
 
 
 def dumps(cnf, **options):
@@ -186,15 +241,6 @@ def dumps(cnf, **options):
     with sqlite3.connect(":memory:") as conn:
         dump(cnf, conn, **options)
         return "\n".join(conn.iterdump())
-
-
-def _fun(*args, **kwargs):
-    """
-    .. note::
-       I think that function to load from string do not make sense in the
-       sqlite backend.
-    """
-    raise NotImplementedError(ERR_NOT_IMPL)
 
 
 def _assert_conn(conn):
@@ -216,8 +262,6 @@ class Parser(anyconfig.backend.base.FromStreamLoader):
     # Others like "timeout", "detect_types", "factory" are not supported yet.
     _load_opts = ["isolation_level", "extensions"]
     _dump_opts = []
-
-    load_from_string = anyconfig.backend.base.to_method(_fun)
 
     @classmethod
     def ropen(cls, filepath, **kwargs):
@@ -256,6 +300,19 @@ class Parser(anyconfig.backend.base.FromStreamLoader):
         """
         _assert_conn(conn)
         return load(conn, to_container, **kwargs)
+
+    def load_from_string(self, content, to_container, **kwargs):
+        """
+        Load config from given string `content` which represents SQL statements
+        to create tables and insert data.
+
+        :param content: Config content string gives SQL statements
+        :param to_container: callble to make a container object later
+        :param kwargs: optional keyword parameters to be sanitized :: dict
+
+        :return: Dict-like object holding config parameters
+        """
+        return loads(content, to_container=to_container, **kwargs)
 
     def dump_to_stream(self, cnf, conn, **kwargs):
         """
