@@ -61,16 +61,20 @@ def _try_exec(cursor, sql, *args):
     """
     An wrapper function for :meth:`execute` of :class:`sqlite3.Cursor`.
     """
+    excs = (sqlite3.IntegrityError, sqlite3.InterfaceError,
+            sqlite3.InternalError)
     try:
         return cursor.execute(sql, *args)
-    except sqlite3.Error as exc:
-        LOGGER.error(exc)
+    except excs as exc:
+        LOGGER.error("exc=%s, sql=%s, args=%s", str(exc), sql, str(args))
         raise
 
 
 def load(conn, to_container=dict, **options):
     """
     Load config data from given initialized :class:`sqlite3.Connection` object.
+
+    .. todo:: Load from tables with foreign key constraints.
 
     :param conn: :class:`sqlite3.Connection` object
     :param to_container:
@@ -90,7 +94,8 @@ def load(conn, to_container=dict, **options):
     _set_options(conn, **options)
     ret = to_container()
     cur = conn.cursor()
-    tbls = _try_exec(cur, "SELECT name FROM sqlite_master WHERE type='table'")
+    tbls = _try_exec(cur,
+                     "SELECT name,sql FROM sqlite_master WHERE type='table'")
 
     for tname in [t[0] for t in tbls]:
         keys = [x[1] for x
@@ -118,9 +123,16 @@ def loads(stmts, to_container=dict, **options):
     conn = sqlite3.connect(":memory:")
     _set_options(conn, **options)
     cur = conn.cursor()
-    _try_exec(cur, stmts)
+    cur.executescript(stmts)
 
     return load(conn, to_container=to_container)
+
+
+def _is_ref(obj):
+    """
+    :return: True if given object `obj` is an instance of Ref.
+    """
+    return isinstance(obj, anyconfig.backend.relations.Ref)
 
 
 def _sqlite_type(val):
@@ -134,11 +146,14 @@ def _sqlite_type(val):
     'REAL'
     >>> _sqlite_type("xyz")
     'TEXT'
+    >>> ref = anyconfig.backend.relations.Ref(relvar="A.A", id=0)
+    >>> _sqlite_type(ref)
+    'INTEGER'
     """
     vtype = type(val)
     if vtype in anyconfig.compat.STR_TYPES:
         return "TEXT"
-    elif vtype == int:
+    elif vtype == int or _is_ref(val):
         return "INTEGER"
     elif vtype == float:
         return "REAL"
@@ -146,11 +161,12 @@ def _sqlite_type(val):
         return "BLOB"
 
 
-def _is_ref(obj):
+def _sql_vars(items):
     """
-    :return: True if given object `obj` is an instance of Ref.
+    :param items:
+        A list of pairs of key and value might contain :class:`Ref` object
     """
-    return isinstance(obj, anyconfig.backend.relations.Ref)
+    return [v.id if _is_ref(v) else v for v in zip(*items)[0]]
 
 
 def _dml_st_itr(rel, data, keys):
@@ -169,30 +185,30 @@ def _dml_st_itr(rel, data, keys):
     for items in data:  # items :: [(key, value)]
         # ..note:: Some reserved keywords must be single-quoted.
         if len(items) < nkeys:  # Some values are missing.
-            rvars = zip(*items)[0]
+            rvars = _sql_vars(items)
             params = ("'%s' (%s)" % (rel,
                                      ", ".join("'%s'" % v for v in rvars)),
                       ", ".join('?' for _ in rvars))
             yield ("INSERT OR REPLACE INTO %s VALUES (%s)" % params,
                    zip(*items)[1])
         else:
-            yield (stmt, zip(*items)[1])
+            yield (stmt, _sql_vars(items))
 
 
-def _create_table_and_insert_data(conn, relvar, data, has_foreign_keys=False):
+def _create_table_and_insert_data(conn, relvar, data, foreign_keys=False):
     """
     :param conn: :class:`sqlite3.Connection` object
     :param relvar: Relation variable to be used as table name
     :param data: A list of data which must not be empty
-    :param has_foreign_keys: True if `relvar` has foreign key constraints
+    :param foreign_keys: True if `relvar` has foreign key constraints
     """
     # data = sorted(data, key=len, reverse=True)  # Is it needed?
     keys = zip(*data[0])[0]
-    kts = ", ".join("'%s' %s\n" % kt for kt
-                    in zip(keys, (_sqlite_type(v) for _k, v in data[0])))
-    if has_foreign_keys:
-        fks = ", ".join("FOREIGN KEY(%s) REFERENCES %s(id)\n" % (k, v.relvar)
-                        for k, v in data[0])
+    kts = ",\n".join("'%s' %s" % kt for kt
+                     in zip(keys, (_sqlite_type(v) for _k, v in data[0])))
+    if foreign_keys:
+        fks = ",\n".join("FOREIGN KEY(%s) REFERENCES %s(id)" % (k, v.relvar)
+                         for k, v in data[0] if _is_ref(v))
         stmt = "CREATE TABLE IF NOT EXISTS '%s' (%s, %s)" % (relvar, kts, fks)
     else:
         stmt = "CREATE TABLE IF NOT EXISTS '%s' (%s)" % (relvar, kts)
@@ -219,16 +235,15 @@ def dump(cnf, conn, **options):
     rrels = []
 
     # 1. Create table of which does not have foreign key constraints.
-    for relvar, data in rels:
-        if any(t for t in data if _is_ref(t[1])):
+    for relvar, data in rels:  # data :: [rel :: ((k0, v0), (k1, v1), ...)]
+        if any(r for r in data if any(_is_ref(v) for v in zip(*r)[1])):
             rrels.append((relvar, data))
             continue
 
         _create_table_and_insert_data(conn, relvar, data)
 
     for relvar, data in rrels:
-        _create_table_and_insert_data(conn, relvar, data,
-                                      has_foreign_keys=True)
+        _create_table_and_insert_data(conn, relvar, data, foreign_keys=True)
 
 
 def dumps(cnf, **options):
