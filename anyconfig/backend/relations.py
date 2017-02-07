@@ -143,7 +143,7 @@ def _ndict_to_rels_itr(dic, seen, relvar=None, idkey=ID_KEY):
     rdic = dic.copy()
     for key, val in dic.items():
         if m9dicts.utils.is_dict_like(val):
-            crelvar = "%s.%s" % (relvar, key) if key == relvar else key
+            crelvar = _gen_relvar(relvar, key) if key == relvar else key
             if idkey in val:
                 refid = val[idkey]
             else:
