@@ -168,7 +168,7 @@ def _sql_vars(items):
     :param items:
         A list of pairs of key and value might contain :class:`Ref` object
     """
-    return [v.id if _is_ref(v) else v for v in zip(*items)[0]]
+    return [v.id if _is_ref(v) else v for v in zip(*items)[1]]
 
 
 def _dml_st_itr(rel, data, keys):
@@ -254,6 +254,20 @@ def dumps(cnf, **options):
     :param options: See the description of `load` function below.
     :return:
         SQL statements to dump config `cnf` as a string
+
+    >>> from __future__ import print_function
+    >>> print(dumps(dict(a=1, b="b", c=[1, 2, 3]))
+    ...      )  # doctest: +NORMALIZE_WHITESPACE
+    BEGIN TRANSACTION;
+    CREATE TABLE 'a_b_c' ('a' INTEGER,
+    'b' TEXT,
+    'c' INTEGER,
+    'id' INTEGER);
+    INSERT INTO "a_b_c" VALUES(1,'b',1,122523911798);
+    INSERT INTO "a_b_c" VALUES(1,'b',2,323292151792);
+    INSERT INTO "a_b_c" VALUES(1,'b',3,896792172031);
+    COMMIT;
+    >>>
     """
     with sqlite3.connect(":memory:") as conn:
         dump(cnf, conn, **options)
