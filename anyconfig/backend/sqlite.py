@@ -36,6 +36,8 @@ import anyconfig.backend.base
 import anyconfig.backend.relations
 import anyconfig.compat
 
+from anyconfig.compat import zip_ as zip
+
 
 LOGGER = logging.getLogger(__name__)
 ILEVELS = (None, "DEFERRED", "IMMEDIATE", "EXCLUSIVE")
