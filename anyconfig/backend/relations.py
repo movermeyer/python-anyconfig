@@ -52,7 +52,7 @@ def _gen_relvar(*args):
     return '_'.join(args)
 
 
-def _rank_1_dict_to_rels(dic, relvar=None):
+def _rank_1_dict_to_rels(dic, relvar=None, idk=ID_KEY):
     """
     Convert a rank 1, not nested, dict to tuples of (relvar, tuples) where
     relvar represents the name of the relations and tuples are a list of tuples
@@ -60,6 +60,7 @@ def _rank_1_dict_to_rels(dic, relvar=None):
 
     :param dic: A dict or dict-like object maybe nested.
     :param relvar: Relation variable
+    :param idk: Key to identify the item
 
     :return: A tuple of (<relvar>, [tuple of key and value])
 
@@ -73,30 +74,30 @@ def _rank_1_dict_to_rels(dic, relvar=None):
     if relvar is None:
         relvar = _gen_relvar(*sorted(dic.keys()))
 
-    if "id" not in dic:
-        dic["id"] = _gen_id(*sorted(dic.items()))
+    if idk not in dic:
+        dic[idk] = _gen_id(*sorted(dic.items()))
 
     return (relvar, tuple(sorted((k, v) for k, v in dic.items())))
 
 
-def _tuple_id(tpl):
+def _tuple_id(tpl, idk=ID_KEY):
     """
     Get the ID of given tuple `tpl`.
 
     :param tpl: (relvar, (tuple_0, ...))
     """
     try:
-        tid = [t for t in tpl[1] if t[0] == "id"][0][1]
+        tid = [t for t in tpl[1] if t[0] == idk][0][1]
         return (tpl[0], tid)  # (relvar, <id>)
     except IndexError:
         return None
 
 
-def _is_new_and_update_seen(tpl, seen):
+def _is_new_and_update_seen(tpl, seen, idk=ID_KEY):
     """
     Search a tuple `tpl` from seen and update it as needed.
     """
-    tid = _tuple_id(tpl)  # (relvar, id), id is not None.
+    tid = _tuple_id(tpl, idk=idk)  # (relvar, id), id is not None.
     if tid not in seen:
         seen.add(tid)
         return True
@@ -112,7 +113,7 @@ def _is_list_item(val):
             not isinstance(val, Ref))
 
 
-def _ndict_to_rels_itr(dic, seen, relvar=None, idkey=ID_KEY):
+def _ndict_to_rels_itr(dic, seen, relvar=None, idk=ID_KEY):
     """
     Convert a dict to tuples of (relvar, tuples) where relvar represents the
     name of the relations and tuples are a list of tuples of each tuple
@@ -123,7 +124,7 @@ def _ndict_to_rels_itr(dic, seen, relvar=None, idkey=ID_KEY):
     :param dic: A dict or dict-like object maybe nested
     :param seen: A set object to search items seen previously
     :param relvar: Relation variable
-    :param idkey: Key to identify the item
+    :param idk: Key to identify the item
 
     :return: A list of (<relvar>, [tuple of key and value])
 
@@ -138,21 +139,20 @@ def _ndict_to_rels_itr(dic, seen, relvar=None, idkey=ID_KEY):
         return  # `dic` is empty.
 
     if relvar is None:
-        relvar = _gen_relvar(*sorted(k for k in dic.keys() if k != "id"))
+        relvar = _gen_relvar(*sorted(k for k in dic.keys() if k != idk))
 
     rdic = dic.copy()
     for key, val in dic.items():
         if m9dicts.utils.is_dict_like(val):
             crelvar = _gen_relvar(relvar, key) if key == relvar else key
-            if idkey in val:
-                refid = val[idkey]
+            if idk in val:
+                refid = val[idk]
             else:
                 refid = _gen_id(*sorted(val.items()))
-                val[idkey] = refid
+                val[idk] = refid
 
             rdic[key] = Ref(crelvar, refid)  # Replace rdic[key] with Ref.
-            for tpl in _ndict_to_rels_itr(val, seen, relvar=crelvar,
-                                          idkey=idkey):
+            for tpl in _ndict_to_rels_itr(val, seen, relvar=crelvar, idk=idk):
                 yield tpl
 
     litems = ((k, v) for k, v in rdic.items() if _is_list_item(v))
@@ -160,12 +160,11 @@ def _ndict_to_rels_itr(dic, seen, relvar=None, idkey=ID_KEY):
         for item in val:  # Clone and yield each relations later.
             ldic = rdic.copy()
             ldic[key] = item  # Replace ldic[key] :: list with item
-            for tpl in _ndict_to_rels_itr(ldic, seen, relvar=relvar,
-                                          idkey=idkey):
+            for tpl in _ndict_to_rels_itr(ldic, seen, relvar=relvar, idk=idk):
                 yield tpl
         return
 
-    tpl = _rank_1_dict_to_rels(rdic, relvar=relvar)
+    tpl = _rank_1_dict_to_rels(rdic, relvar=relvar, idk=idk)
     if _is_new_and_update_seen(tpl, seen):
         yield tpl
 
