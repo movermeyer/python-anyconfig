@@ -38,11 +38,11 @@ def object_to_id(obj, digits=12):
     return int(str(nid)[:digits])
 
 
-def _gen_id(*args):
+def _gen_id(dic):
     """
-    :return: ID (long int) value generated from `args`
+    :return: ID (long int) value generated from `dic`
     """
-    return object_to_id(sorted(args))
+    return object_to_id(sorted(dic.items()))
 
 
 def _gen_relvar(*args):
@@ -75,7 +75,7 @@ def _rank_1_dict_to_rels(dic, relvar=None, idk=ID_KEY):
         relvar = _gen_relvar(*sorted(dic.keys()))
 
     if idk not in dic:
-        dic[idk] = _gen_id(*sorted(dic.items()))
+        dic[idk] = _gen_id(dic)
 
     return (relvar, tuple(sorted((k, v) for k, v in dic.items())))
 
@@ -96,6 +96,13 @@ def _tuple_id(tpl, idk=ID_KEY):
 def _is_new_and_update_seen(tpl, seen, idk=ID_KEY):
     """
     Search a tuple `tpl` from seen and update it as needed.
+
+    >>> seen = set()
+    >>> tpl = ('A', (('id', 1), ('a', "AAA")))
+    >>> _is_new_and_update_seen(tpl, seen)
+    True
+    >>> _is_new_and_update_seen(tpl, seen)
+    False
     """
     tid = _tuple_id(tpl, idk=idk)  # (relvar, id), id is not None.
     if tid not in seen:
@@ -105,9 +112,23 @@ def _is_new_and_update_seen(tpl, seen, idk=ID_KEY):
     return False
 
 
+def _gen_relvar_from_dic(dic):
+    """
+    Generate relvar from given dict `dic` to avoid conflict between relvar and
+    key name in the dict.
+    """
+    keys = sorted(dic.keys())
+    return "relvar_%s" % keys[0] if len(keys) == 1 else _gen_relvar(*keys)
+
+
 def _is_list_item(val):
     """
     :return: True if given `val` is a list of items or False
+
+    >>> all(_is_list_item(x) for x in (['a'], (1, )))
+    True
+    >>> all(not _is_list_item(x) for x in (None, '', {}, Ref(1, 2)))
+    True
     """
     return (val and m9dicts.utils.is_list_like(val) and
             not isinstance(val, Ref))
@@ -139,33 +160,36 @@ def _ndict_to_rels_itr(dic, seen, relvar=None, idk=ID_KEY):
         return  # `dic` is empty.
 
     if relvar is None:
-        relvar = _gen_relvar(*sorted(k for k in dic.keys() if k != idk))
+        relvar = _gen_relvar_from_dic(dic)
 
-    rdic = dic.copy()
-    for key, val in dic.items():
+    litems = [(k, v) for k, v in dic.items() if _is_list_item(v)]
+    rdic = dict(kv for kv in dic.items() if kv not in litems)
+    pid = rdic[idk] if idk in rdic else _gen_id(rdic)
+
+    for key, val in litems:
+        crelvar = _gen_relvar(relvar, key) if key == relvar else key
+        for item in val:  # Yield relations for each items.
+            ldic = {key: item, relvar: Ref(relvar, pid)}
+            for tpl in _ndict_to_rels_itr(ldic, set(), relvar=crelvar,
+                                          idk=idk):
+                yield tpl
+
+    for key, val in rdic.items():
         if m9dicts.utils.is_dict_like(val):
             crelvar = _gen_relvar(relvar, key) if key == relvar else key
-            if idk in val:
+            if idk in val and not any(isinstance(v, Ref) for v
+                                      in val.values()):
                 refid = val[idk]
             else:
-                refid = _gen_id(*sorted(val.items()))
+                refid = _gen_id(val)
                 val[idk] = refid
 
             rdic[key] = Ref(crelvar, refid)  # Replace rdic[key] with Ref.
             for tpl in _ndict_to_rels_itr(val, seen, relvar=crelvar, idk=idk):
                 yield tpl
 
-    litems = ((k, v) for k, v in rdic.items() if _is_list_item(v))
-    for key, val in litems:
-        for item in val:  # Clone and yield each relations later.
-            ldic = rdic.copy()
-            ldic[key] = item  # Replace ldic[key] :: list with item
-            for tpl in _ndict_to_rels_itr(ldic, seen, relvar=relvar, idk=idk):
-                yield tpl
-        return
-
     tpl = _rank_1_dict_to_rels(rdic, relvar=relvar, idk=idk)
-    if _is_new_and_update_seen(tpl, seen):
+    if _is_new_and_update_seen(tpl, seen, idk=idk):
         yield tpl
 
 

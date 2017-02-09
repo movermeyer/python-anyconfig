@@ -21,18 +21,22 @@ class Test_20__ndict_to_rels_itr(unittest.TestCase):
 
     >>> s = set(); f(dict(A=dict(a=1, id=1)),
     ...              s)  # doctest: +NORMALIZE_WHITESPACE
-    [('A', (('A', Ref(relvar='A_A', id=1)), ('id', 189964564834))),
-     ('A_A', (('a', 1), ('id', 1)))]
+    [('A', (('a', 1), ('id', 1))),
+     ('relvar_A', (('A', Ref(relvar='A', id=1)), ('id', 288308896189)))]
 
     >>> s = set(); f(dict(A=dict(a=1)),
     ...              s)  # doctest: +NORMALIZE_WHITESPACE
-    [('A', (('A', Ref(relvar='A_A', id=224491522528)), ('id', 177184444107))),
-     ('A_A', (('a', 1), ('id', 224491522528)))]
+    [('A', (('a', 1), ('id', 224491522528))),
+     ('relvar_A',
+      (('A', Ref(relvar='A', id=224491522528)), ('id', 181689300653)))]
 
-    >>> f(dict(A=[dict(a=1, id=0)]),
-    ...   s, "A")  # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
-    [('A', (('A', Ref(relvar='A_A', id=0)), ('id', 327997332858))),
-     ('A_A', (('a', 1), ('id', 0)))]
+    >>> f(dict(A=[dict(a=1, id=0)]), s)  # doctest: +NORMALIZE_WHITESPACE
+    [('A',
+      (('A', Ref(relvar='A_A', id=0)),
+       ('id', 114425483921),
+       ('relvar_A', Ref(relvar='relvar_A', id=286206891609)))),
+     ('A_A', (('a', 1), ('id', 0))),
+     ('relvar_A', (('id', 286206891609),))]
     """
 
     def test_10_with_id_and_relvar(self):
